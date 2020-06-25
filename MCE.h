@@ -1,18 +1,11 @@
 #pragma once
 #include <vector>
 #include <string>
+
 using namespace std;
 
 typedef unsigned int uint;
 typedef vector<string>* pPerChain;
-typedef struct Ff_pairs
-{
-	double conv;
-	double f_A;
-	double F_A;
-	Ff_pairs(double percent,double fA, double FA):
-	conv(percent),f_A(fA), F_A(FA){}
-} Ff_pairs;
 
 class MCE
 {
