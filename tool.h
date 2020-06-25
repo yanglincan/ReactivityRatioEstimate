@@ -26,22 +26,12 @@ typedef struct SplitInfo
 		_blocks(blocks), _x_stepLength(x_stepLength), _y_stepLength(y_stepLength) {}
 } SplitInfo;
 
-typedef struct rArBFAYr
-{
-	double m_rA;
-	double m_rB;
-	vector<double>* m_pFA_V;
-	double m_YrVal;
-	double m_DfVal;
-	rArBFAYr(double rA, double rB) :m_rA(rA), m_rB(rB), m_pFA_V(NULL), m_YrVal(0), m_DfVal(0) {}
-} rArBFAYr;
-
 class GetFiles
 {
 public:
 	const vector<string>& getFiles(const string& path);
-	//char *getcwd( char *buffer, int maxlen £©
-	//º¯ÊıÄÜ¹»»ñÈ¡µ±Ç°µÄ¹¤×÷Ä¿Â¼£¬¾ßÌåÀ´Ëµ£¬Ëü»á½«µ±Ç°¹¤×÷Ä¿Â¼µÄ¾ø¶ÔÂ·¾¶¸´ÖÆµ½²ÎÊıbufferËùÖ¸µÄÄÚ´æ¿Õ¼äÖĞ,²ÎÊımaxlenÎªbufferµÄ¿Õ¼ä´óĞ¡¡£
+	//char *getcwd( char *buffer, int maxlen ï¼‰
+	//å‡½æ•°èƒ½å¤Ÿè·å–å½“å‰çš„å·¥ä½œç›®å½•ï¼Œå…·ä½“æ¥è¯´ï¼Œå®ƒä¼šå°†å½“å‰å·¥ä½œç›®å½•çš„ç»å¯¹è·¯å¾„å¤åˆ¶åˆ°å‚æ•°bufferæ‰€æŒ‡çš„å†…å­˜ç©ºé—´ä¸­,å‚æ•°maxlenä¸ºbufferçš„ç©ºé—´å¤§å°ã€‚
 	string GetWorkingDirectory();
 private:
 	vector<string> m_FilesVector;
@@ -71,4 +61,4 @@ public:
 SplitInfo SplitRect(const ddRange x_range, const ddRange y_range, const int desiredBlocks);
 int GetThreadNumber();
 const string GetSimuFile();
-void WriteToFile(vector<rArBFAYr*>* pFcalA_V, string filename);
+string WCharToMByte(LPCWSTR lpcwszStr);
