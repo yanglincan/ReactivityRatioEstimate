@@ -63,21 +63,26 @@ const string GetSimuFile()
 
 const vector<string>& GetFiles::getFiles(const string& path)
 {
-	//Œƒº˛æ‰±˙  
+	//Êñá‰ª∂Âè•ÊüÑ  
 	intptr_t hFile = 0;
-	//Œƒº˛–≈œ¢  
+	//Êñá‰ª∂‰ø°ÊÅØ  
 	struct _finddata_t fileinfo;
 	string p;
-	if ((hFile = _findfirst(p.assign(path).append("\\*").c_str(), &fileinfo)) != -1){
-		do{
-			//»Áπ˚ «ƒø¬º,µ¸¥˙÷Æ  
-			//»Áπ˚≤ª «,º”»Î¡–±Ì  
-			if ((fileinfo.attrib & _A_SUBDIR)){
+	if ((hFile = _findfirst(p.assign(path).append("\\*").c_str(), &fileinfo)) != -1)
+	{
+		do
+		{
+			//Â¶ÇÊûúÊòØÁõÆÂΩï,Ëø≠‰ª£‰πã  
+			//Â¶ÇÊûú‰∏çÊòØ,Âä†ÂÖ•ÂàóË°®  
+			if ((fileinfo.attrib & _A_SUBDIR))
+			{
 				if (strcmp(fileinfo.name, ".") != 0 && strcmp(fileinfo.name, "..") != 0)
 					getFiles(p.assign(path).append("\\").append(fileinfo.name));
 			}
 			else
+			{
 				m_FilesVector.push_back(p.assign(path).append("\\").append(fileinfo.name));
+			}
 		} while (_findnext(hFile, &fileinfo) == 0);
 		_findclose(hFile);
 	}
@@ -93,8 +98,7 @@ string GetFiles::GetWorkingDirectory()
 }
 
 ScanFile::ScanFile() :
-	pfA_Vec(NULL), pFA_Vec(NULL), 
-	minStepSizeRA(0), minStepSizeRB(0)
+	pfA_Vec(NULL), pFA_Vec(NULL), minStepSizeRA(0), minStepSizeRB(0)
 {
 	pfA_Vec = new vector<double>;
 	pFA_Vec = new vector<double>;
@@ -118,16 +122,8 @@ void ScanFile::ScanFileSection(const string& strBegin, const string& strEnd, voi
 	m_SimuFile.seekg(0, std::ios::beg);
 	while (!m_SimuFile.eof()){
 		m_SimuFile.getline(buffer, 100);
-		string strLine(buffer);
-		if (string::npos != strLine.find(strBegin)){
-			while (!m_SimuFile.eof()){
-				m_SimuFile.getline(buffer, 100);
-				strLine = buffer;
-				if (string::npos != strLine.find(strEnd))
-					return;
-				Analysis(strLine, this);
-			}
-		}
+		string strLine = buffer;
+		Analysis(strLine, this);
 	}
 }
 
@@ -147,52 +143,16 @@ void ScanFile::SplitString(const string& s, vector<string>& v, const string& c)
 
 void ScanfAFA(const string& strLine, ScanFile* pCurrent)
 {
-#define fF_VECTOR_SIZE 2
-#define LOWER_BOUNDARY 0
-#define UPPER_BOUNDARY 1
 	if (strLine.empty())
 		return;
 	vector<string> vectorStr;
 	pCurrent->SplitString(strLine, vectorStr, "\t");
-	if (vectorStr.size() < fF_VECTOR_SIZE) {
+	if (vectorStr.size() < 2) {
 		vectorStr.clear();
 		return;
 	}
-	double f_value = atof(vectorStr[0].data());
-	double F_value = atof(vectorStr[1].data());
-	if (f_value <= LOWER_BOUNDARY || F_value <= LOWER_BOUNDARY ||
-		f_value >= UPPER_BOUNDARY || F_value >= UPPER_BOUNDARY)
-		return;
-	pCurrent->pfA_Vec->push_back(f_value);
-	pCurrent->pFA_Vec->push_back(F_value);
-	vectorStr.clear();
-}
-
-void Scan_rArB(const string& strLine, ScanFile* pCurrent)
-{
-#define RARB_VECTOR_SIZE 4
-#define LOWER_BOUNDARY 0
-	if (strLine.empty())
-		return;
-	vector<string> vectorStr;
-	pCurrent->SplitString(strLine, vectorStr, "\t");
-	if (vectorStr.size() < RARB_VECTOR_SIZE) {
-		vectorStr.clear();
-		return;
-	}
-	double left = atof(vectorStr[1].data());
-	double right = atof(vectorStr[2].data());
-	double stepLength = atof(vectorStr[3].data());
-	if (left < LOWER_BOUNDARY || left >= right || stepLength < 0)
-		return;
-	if ("rA" == vectorStr[0]) {
-		pCurrent->rA_range = make_pair(left, right);
-		pCurrent->minStepSizeRA = stepLength;
-	}
-	else if ("rB" == vectorStr[0]) {
-		pCurrent->rB_range = make_pair(left, right);
-		pCurrent->minStepSizeRB = stepLength;
-	}
+	pCurrent->pfA_Vec->push_back(atof(vectorStr[0].data()));
+	pCurrent->pFA_Vec->push_back(atof(vectorStr[1].data()));
 	vectorStr.clear();
 }
 
@@ -201,18 +161,20 @@ void ScanFile::Scan(const string& strSimuFile)
 	m_SimuFile.open(strSimuFile, ios::in);
 	if (!m_SimuFile.is_open())
 		exit(0);
-	ScanFileSection("fA_FA", "End_fA_FA", ScanfAFA);
-	ScanFileSection("rA_rB", "End_rA_rB", Scan_rArB);
+	ScanFileSection("", "", ScanfAFA);
 }
 
-void WriteToFile(vector<rArBFAYr*>* pFcalA_V, string filename)
+string WCharToMByte(LPCWSTR lpcwszStr)
 {
-	ofstream outFile;
-	//string stringOutFile = m_strSimuFile + appx + ".out";
-	outFile.open(filename.data(), ios::app);
-	outFile << "rA\trB\tYR\tDf" << endl;
-	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++)
-		outFile << (*it_rArB)->m_rA << "\t" << (*it_rArB)->m_rB
-		<< "\t" << (*it_rArB)->m_YrVal << "\t" << (*it_rArB)->m_DfVal << endl;
-	outFile.close();
+	string str;
+	DWORD dwMinSize = 0;
+	LPSTR lpszStr = NULL;
+	dwMinSize = WideCharToMultiByte(CP_OEMCP, NULL, lpcwszStr, -1, NULL, 0, NULL, FALSE);
+	if (0 == dwMinSize)
+		return FALSE;
+	lpszStr = new char[dwMinSize];
+	WideCharToMultiByte(CP_OEMCP, NULL, lpcwszStr, -1, lpszStr, dwMinSize, NULL, FALSE);
+	str = lpszStr;
+	delete[] lpszStr;
+	return str;
 }
