@@ -11,7 +11,7 @@ uint CreateRandomInteger(uint nMax)
 		return -1;
 	if (0 == nMax)
 		return 0;
-	return rand() % nMax;	//取得[a,b]的随机整数：rand()%(b-a+1)+a, RAND_MAX = 32767
+	return rand() % nMax;	//鍙栧緱[a,b]鐨勯殢鏈烘暣鏁帮細rand()%(b-a+1)+a, RAND_MAX = 32767
 }
 
 double CreateRandomDouble()
@@ -72,7 +72,6 @@ void MCE::Simulation()
 		ChainInitiation(currentChain);
 	else
 		ChainPropagation(currentChain);
-	UpdateProbability();
 }
 
 void MCE::ChainInitiation(pPerChain& currentChain)
