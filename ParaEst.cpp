@@ -4,29 +4,28 @@
 
 using namespace std;
 
-#define STEPS 100
-#define TOTAL_PROBABILITY 1
 static int threadcounting = 0;
 
-ParaEst::ParaEst(const string& strSimuFile) :
-	rA_Range(ddRange(0, 0)), rB_Range(ddRange(0, 0)), 
-	minStepSizeRA(0), minStepSizeRB(0),
+ParaEst::ParaEst(const string& strSimuFile, ScanFile& scanFile) :
+	rA_Range(ddRange(0, 0)), rB_Range(ddRange(0, 0)), minStepSizeRA(0), minStepSizeRB(0),
 	pFcalA_Vec_ML(NULL), pFcalA_Vec_MC(NULL),
 	m_strSimuFile(strSimuFile),
-	_ThreadCount(0)
+	_ThreadCount(0), 
+	rA_Aver(0), rB_Aver(0),
+	rA_MaxLikelihood(0), rB_MaxLikelihood(0)
 {
 	pFcalA_Vec_ML = new vector<rArBFAYr*>;
 	pFcalA_Vec_MC = new vector<rArBFAYr*>;
-	//É¨ÃèÊäÈëÎÄ¼ş
+	//æ‰«æè¾“å…¥æ–‡ä»¶
 	scanFile.Scan(m_strSimuFile);
-	pfA_Vec = scanFile.pfA_Vec;		//»ñÈ¡ fA ÊıÖµ
-	pFA_Vec = scanFile.pFA_Vec;		//»ñÈ¡ FA ÊıÖµ
-	rA_Range = scanFile.rA_range;	//»ñÈ¡ rA ·¶Î§
-	rB_Range = scanFile.rB_range;	//»ñÈ¡ rB ·¶Î§
+	pfA_Vec = scanFile.pfA_Vec;		//è·å– fA æ•°å€¼
+	pFA_Vec = scanFile.pFA_Vec;		//è·å– FA æ•°å€¼
+	rA_Range = scanFile.rA_range;	//è·å– rA èŒƒå›´
+	rB_Range = scanFile.rB_range;	//è·å– rB èŒƒå›´
 	if (0 < scanFile.minStepSizeRA)
-		minStepSizeRA = scanFile.minStepSizeRA;		//»ñÈ¡ rA×îĞ¡²½³¤
+		minStepSizeRA = scanFile.minStepSizeRA;		//è·å– rAæœ€å°æ­¥é•¿
 	if (0 < scanFile.minStepSizeRB)
-		minStepSizeRB = scanFile.minStepSizeRB;		//»ñÈ¡ rB×îĞ¡²½³¤
+		minStepSizeRB = scanFile.minStepSizeRB;		//è·å– rBæœ€å°æ­¥é•¿
 }
 
 ParaEst::~ParaEst()
@@ -35,66 +34,64 @@ ParaEst::~ParaEst()
 	DeletepFA_Vec(pFcalA_Vec_MC);
 }
 
-//Mayo-Lewis ¹«Ê½
+//Mayo-Lewis å…¬å¼
 double Cal_F_from_rf(double rA, double rB, double fA, double fB)
 {
 	return (rA * fA * fA + fA * fB) / (rA * fA * fA + 2 * fA * fB + rB * fB * fB);
 }
 
-//»ùÓÚ Monte Carlo Estimmation ·½·¨µÄ¼ÆËã¹ı³Ì
+//åŸºäº Monte Carlo Estimmation æ–¹æ³•çš„è®¡ç®—è¿‡ç¨‹
 void ParaEst::CalcOn_MCE()
 {
-	ddPair stepSize = StepSizerArB();	//»ñÈ¡ rA ºÍ rB µÄÇ°½ø²½³¤£¬pairÖĞ first Îª rA ²½³¤£¬second Îª rB ²½³¤
-	OnMultiThreads(stepSize);			//ÔÚ¶àÏß³ÌÉÏÖ´ĞĞ¼ÆËã£¬¼õĞ¡¼ÆËãÊ±¼ä
-	cout << "Monte Carlo Estimation Result:  " << endl;
-	PostProba_YrVal(stepSize.first, stepSize.second, pFcalA_Vec_MC);	//ºóÑé¸ÅÂÊÃÜ¶È ÆÀ¹À£¬ÒÔ¼° ºóÑé¸ÅÂÊÃÜ¶ÈÇúÃæ µÄ Ìå»ı»ı·Ö¡£
-	WriteToFile(pFcalA_Vec_MC, m_strSimuFile + "_MCE.out");		//Êä³öÊı¾İ
-	cout << endl;
+	ddPair stepSize = StepSizerArB();	//è·å– rA å’Œ rB çš„å‰è¿›æ­¥é•¿ï¼Œpairä¸­ first ä¸º rA æ­¥é•¿ï¼Œsecond ä¸º rB æ­¥é•¿
+	OnMultiThreads(stepSize);			//åœ¨å¤šçº¿ç¨‹ä¸Šæ‰§è¡Œè®¡ç®—ï¼Œå‡å°è®¡ç®—æ—¶é—´
+	//cout << "Monte Carlo Estimation Result:  " << endl;
+	PostProba_YrVal(stepSize.first, stepSize.second, pFcalA_Vec_MC);	//åéªŒæ¦‚ç‡å¯†åº¦ è¯„ä¼°ï¼Œä»¥åŠ åéªŒæ¦‚ç‡å¯†åº¦æ›²é¢ çš„ ä½“ç§¯ç§¯åˆ†ã€‚
+	WriteToFile(pFcalA_Vec_MC, "_MCE");		//è¾“å‡ºæ•°æ®
 }
 
-//»ùÓÚ Mayo-Lewis·½³Ì µÄ¼ÆËã¹ı³Ì
+//åŸºäº Mayo-Lewisæ–¹ç¨‹ çš„è®¡ç®—è¿‡ç¨‹
 void ParaEst::CalcOn_M_L()
 {
-	ddPair stepSize = StepSizerArB();		//»ñÈ¡ rA ºÍ rB µÄÇ°½ø²½³¤£¬pairÖĞ first Îª rA ²½³¤£¬second Îª rB ²½³¤
-	Loop_M_L(stepSize);						//°´ÕÕ²½³¤´óĞ¡£¬Ñ­»·Ö´ĞĞ
-	cout << "Mayo-Lewis Equation Result:  " << endl;
-	PostProba_YrVal(stepSize.first, stepSize.second, pFcalA_Vec_ML);	//ºóÑé¸ÅÂÊÃÜ¶È ÆÀ¹À£¬ÒÔ¼° ºóÑé¸ÅÂÊÃÜ¶ÈÇúÃæ µÄ Ìå»ı»ı·Ö¡£
-	WriteToFile(pFcalA_Vec_ML, m_strSimuFile + "_M-L.out");		//Êä³öÊı¾İ
-	cout << endl;
+	ddPair stepSize = StepSizerArB();		//è·å– rA å’Œ rB çš„å‰è¿›æ­¥é•¿ï¼Œpairä¸­ first ä¸º rA æ­¥é•¿ï¼Œsecond ä¸º rB æ­¥é•¿
+	Loop_M_L(stepSize);						//æŒ‰ç…§æ­¥é•¿å¤§å°ï¼Œå¾ªç¯æ‰§è¡Œ
+	//cout << "Mayo-Lewis Equation Result:  " << endl;
+	PostProba_YrVal(stepSize.first, stepSize.second, pFcalA_Vec_ML);	//åéªŒæ¦‚ç‡å¯†åº¦ è¯„ä¼°ï¼Œä»¥åŠ åéªŒæ¦‚ç‡å¯†åº¦æ›²é¢ çš„ ä½“ç§¯ç§¯åˆ†ã€‚
+	WriteToFile(pFcalA_Vec_ML, "_M-L");		//è¾“å‡ºæ•°æ®
 }
 
-//¶ÔÃ¿¸ö fAÖµ ½øĞĞ Monte Carlo Estimmation ¼ÆËã
+//å¯¹æ¯ä¸ª fAå€¼ è¿›è¡Œ Monte Carlo Estimmation è®¡ç®—
 void Cal_F_for_fA_Vec_MC(double rA, double rB, vector<rArBFAYr*>* pFcalA_Vec, vector<double>* pfA_Vec)
 {
 	rArBFAYr* pTemp = new rArBFAYr(rA, rB);
 	pTemp->m_pFA_V = new vector<double>;
 	for (auto itor = pfA_Vec->begin(); itor != pfA_Vec->end(); itor++) {
-		MCE mce(rA, rB, *itor);		//*itor Îª fAÖµ
-		pTemp->m_pFA_V->push_back(mce.Cal_F_from_rf());		//Cal_F_from_rf º¯Êı Ö´ĞĞ ¾ßÌå¼ÆËã
+		MCE mce(rA, rB, *itor);		//*itor ä¸º fAå€¼
+		pTemp->m_pFA_V->push_back(mce.Cal_F_from_rf());		//Cal_F_from_rf å‡½æ•° æ‰§è¡Œ å…·ä½“è®¡ç®—
 	}
 	pFcalA_Vec->push_back(pTemp);
 }
 
-//¶ÔÃ¿¸ö fAÖµ ½øĞĞ Mayo-Lewis·½³Ì ¼ÆËã
+//å¯¹æ¯ä¸ª fAå€¼ è¿›è¡Œ Mayo-Lewisæ–¹ç¨‹ è®¡ç®—
 void ParaEst::Cal_F_for_fA_Vec_ML(double rA, double rB)
 {
 	rArBFAYr* pTemp = new rArBFAYr(rA, rB);
 	pTemp->m_pFA_V = new vector<double>;
-	for (auto itor = pfA_Vec->begin(); itor != pfA_Vec->end(); itor++)			//*itor Îª fAÖµ
-		pTemp->m_pFA_V->push_back(Cal_F_from_rf(rA, rB, *itor, 1 - (*itor)));	//Cal_F_from_rf º¯Êı Ö´ĞĞ ¾ßÌå¼ÆËã
+	for (auto itor = pfA_Vec->begin(); itor != pfA_Vec->end(); itor++)			//*itor ä¸º fAå€¼
+		pTemp->m_pFA_V->push_back(Cal_F_from_rf(rA, rB, *itor, 1 - (*itor)));	//Cal_F_from_rf å‡½æ•° æ‰§è¡Œ å…·ä½“è®¡ç®—
 	pFcalA_Vec_ML->push_back(pTemp);
 }
 
-//¶ÔÃ¿¶Ô rA ºÍ rB ½øĞĞ Monte Carlo Estimmation ¼ÆËã
+//å¯¹æ¯å¯¹ rA å’Œ rB è¿›è¡Œ Monte Carlo Estimmation è®¡ç®—
 void Loop_MCE(ddRange rA_LocalRange, ddRange rB_LocalRange, ddPair stepSize, ParaEst* pParaEst, int threadPos)
 {
 	for (double rA_step = rA_LocalRange.first; rA_step < rA_LocalRange.second; rA_step += stepSize.first)
 		for (double rB_step = rB_LocalRange.first; rB_step < rB_LocalRange.second; rB_step += stepSize.second)
 			Cal_F_for_fA_Vec_MC(rA_step, rB_step, pParaEst->GetFcalA_Vec_MC_Vec().at(threadPos), pParaEst->GetpfA_Vec());
-	++threadcounting;	//È«¾ÖÁ¿£¬Í³¼ÆÍê³ÉµÄÏß³ÌÊıÁ¿
+	++threadcounting;	//å…¨å±€é‡ï¼Œç»Ÿè®¡å®Œæˆçš„çº¿ç¨‹æ•°é‡
 }
 
-//¶ÔÃ¿¶Ô rA ºÍ rB ½øĞĞ Mayo-Lewis·½³Ì ¼ÆËã
+//å¯¹æ¯å¯¹ rA å’Œ rB è¿›è¡Œ Mayo-Lewisæ–¹ç¨‹ è®¡ç®—
 void ParaEst::Loop_M_L(ddPair stepSize)
 {
 	for (double rA_step = rA_Range.first; rA_step < rA_Range.second; rA_step += stepSize.first)
@@ -102,72 +99,75 @@ void ParaEst::Loop_M_L(ddPair stepSize)
 			Cal_F_for_fA_Vec_ML(rA_step, rB_step);
 }
 
-//²½³¤ÖÙ²ÃÆ÷
+//æ­¥é•¿ä»²è£å™¨
 ddPair ParaEst::StepSizerArB()
 {
-	//Ä¬ÈÏ½«·¶Î§·ÖÎª100·İ£¨STEPS Îª 100£©£¬Ã¿Ò»·İ¼´Îª²½³¤£¬Òò´Ë ×î¶à ×Ü¹²ÓĞ 100*100 ¾º¾ÛÂÊ×éºÏ£¨rA,rB£©
-	//Èç¹û·¶Î§Ì«Ğ¡£¬Ä¬ÈÏµÄ100²½£¬²½ÊıÌ«ÃÜ¼¯£¬¿ÉÔÚÊäÈëÎÄ¼şÖĞ£¬Éè¶¨×îĞ¡²½³¤ minStepSize£¬¼õĞ¡²½Êı
-	if (rA_Range.second <= rA_Range.first || rB_Range.second <= rB_Range.first)
-		exit(0);
+	//é»˜è®¤å°†èŒƒå›´åˆ†ä¸º100ä»½ï¼ˆSTEPS ä¸º 100ï¼‰ï¼Œæ¯ä¸€ä»½å³ä¸ºæ­¥é•¿ï¼Œå› æ­¤ æœ€å¤š æ€»å…±æœ‰ 100*100 ç«èšç‡ç»„åˆï¼ˆrA,rBï¼‰
+	//å¦‚æœèŒƒå›´å¤ªå°ï¼Œé»˜è®¤çš„100æ­¥ï¼Œæ­¥æ•°å¤ªå¯†é›†ï¼Œå¯åœ¨è¾“å…¥æ–‡ä»¶ä¸­ï¼Œè®¾å®šæœ€å°æ­¥é•¿ minStepSizeï¼Œå‡å°æ­¥æ•°
 	double stepSize_rA = (rA_Range.second - rA_Range.first) / STEPS < minStepSizeRA ? minStepSizeRA : (rA_Range.second - rA_Range.first) / STEPS;
-	double stepSize_rB = (rB_Range.second - rB_Range.first) / STEPS < minStepSizeRB ? minStepSizeRB : (rB_Range.second - rB_Range.first) / STEPS;
+	double stepSize_rB = (rB_Range.second - rB_Range.first) / STEPS < minStepSizeRA ? minStepSizeRA : (rB_Range.second - rB_Range.first) / STEPS;
 	return make_pair(stepSize_rA, stepSize_rB);
 }
 
+#include<algorithm>
 void ParaEst::PostProba_YrVal(double stepSize_rA, double stepSize_rB, vector<rArBFAYr*>* pFcalA_V)
 {
+	rA_Aver = rB_Aver = rA_MaxLikelihood = rB_MaxLikelihood = 0;
 	if (pFcalA_V->empty())
 		return;
 	double rA_cal = 0;
 	double rB_cal = 0;
-	double forC = 0;
-	double CoefficientC = 0;
-	//¼ÆËã ±ê×¼²î£¬ÎªËùÓĞ(rA,rB)ÏÂµÄ±ê×¼²îµÄÆ½¾ùÖµ
+	double cumulativeVolume = 0;
+	double coefficient_C = 0;
 	double aver_Sigma = 0;
+	//æ•´ä½“æ ‡å‡†å·®è®¡ç®—
 	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++) {
 		size_t count = (*it_rArB)->m_pFA_V->size();
-		//Æ½¾ùÖµ
 		double aver = 0;
 		for (size_t pos = 0; pos < count; pos++)
 			aver += (pFA_Vec->at(pos) - (*it_rArB)->m_pFA_V->at(pos));
-		aver /= count;
-		//µ¥¸ö(rA,rB)µÄ±ê×¼²î
+		aver /= count;	//å•ä¸ª(rA,rB)çš„å¹³å‡å€¼
 		double sigma = 0;
 		for (size_t pos = 0; pos < count; pos++)
 			sigma += pow(((pFA_Vec->at(pos) - (*it_rArB)->m_pFA_V->at(pos)) - aver), 2);
-		aver_Sigma += sqrt(sigma / count);		//µ¥¸ö(rA,rB)µÄ±ê×¼²î
+		aver_Sigma += sqrt(sigma / count);		//å•ä¸ª(rA,rB)çš„æ ‡å‡†å·®
 	}
-	aver_Sigma /= pFcalA_V->size();
-
-	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++) {
+	aver_Sigma /= pFcalA_V->size();		//æ•´ä½“æ ‡å‡†å·®
+	//åéªŒæ¦‚ç‡å¯†åº¦
+	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++){
 		size_t count = (*it_rArB)->m_pFA_V->size();
-		//ºóÑé¸ÅÂÊÃÜ¶È
 		double yr = 0;
 		for (size_t pos = 0; pos < count; pos++)
 			yr += pow((pFA_Vec->at(pos) - (*it_rArB)->m_pFA_V->at(pos)) / aver_Sigma, 2);
 		(*it_rArB)->m_YrVal = yr;
-		(*it_rArB)->m_DfVal = exp(-0.5 * yr);
-		//¼ÆËãdrA*drB£¬Ìå»ı»ı·ÖÖĞ»ı·Öµ¥ÔªµÄĞ¡µ×Ãæ»ıdxdy
-		double uint = stepSize_rA * stepSize_rB;
-		//Ìå»ı»ı·ÖÀÛ¼Ó
-		forC += (*it_rArB)->m_DfVal * uint;
-		//rAºÍrBµÄ¼ÓÈ¨Æ½¾ùÖµ
-		rA_cal += (*it_rArB)->m_DfVal * (*it_rArB)->m_rA * uint;
-		rB_cal += (*it_rArB)->m_DfVal * (*it_rArB)->m_rB * uint;
+		(*it_rArB)->m_DfVal = exp(-0.5 * yr);							//åéªŒæ¦‚ç‡å¯†åº¦
+		double uint = stepSize_rA * stepSize_rB;						//ä½“ç§¯ç§¯åˆ†å•å…ƒåº•é¢ç§¯dxdy
+		cumulativeVolume += (*it_rArB)->m_DfVal * uint;					//ä½“ç§¯ç§¯åˆ†ç´¯åŠ 
+		rA_cal += (*it_rArB)->m_DfVal * (*it_rArB)->m_rA * uint;		//rAåŠ æƒå¹³å‡å€¼
+		rB_cal += (*it_rArB)->m_DfVal * (*it_rArB)->m_rB * uint;		//rBåŠ æƒå¹³å‡å€¼
 	}
-	//¼ÆËã±ÈÀıÏµÊıC£¬¹éÒ»»¯´¦Àí£¬¸ÅÂÊÃÜ¶È×Ü»ı·Ö TOTAL_PROBABILITY Îª 1¡£
-	CoefficientC = TOTAL_PROBABILITY / forC;
-	cout << "Average Value :" << endl;
-	cout << "\trA = " << CoefficientC * rA_cal << endl;
-	cout << "\trB = " << CoefficientC * rB_cal << endl;
-	//¼«´óËÆÈ»¹À¼Æ
+	coefficient_C = TOTAL_PROBABILITY / cumulativeVolume;				//è®¡ç®—æ¯”ä¾‹ç³»æ•°Cï¼Œå½’ä¸€åŒ–å¤„ç†ã€‚
+	rA_Aver = coefficient_C * rA_cal;
+	rB_Aver = coefficient_C * rB_cal;
+	//æå¤§ä¼¼ç„¶ä¼°è®¡
 	auto itor_minYrVal = pFcalA_V->begin();
-	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++)
+	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++) 
 		if ((*it_rArB)->m_YrVal < (*itor_minYrVal)->m_YrVal)
-			itor_minYrVal = it_rArB;	//ÕÒ×îĞ¡Öµ
-	cout << "Max. Likelihood:" << endl;
-	cout << "\trA = " << (*itor_minYrVal)->m_rA << endl;
-	cout << "\trB = " << (*itor_minYrVal)->m_rB << endl;
+			itor_minYrVal = it_rArB;	//æ‰¾æœ€å°å€¼
+	rA_MaxLikelihood = (*itor_minYrVal)->m_rA;
+	rB_MaxLikelihood = (*itor_minYrVal)->m_rB;
+}
+
+void ParaEst::WriteToFile(vector<rArBFAYr*>* pFcalA_V, string appx)
+{
+	ofstream outFile;
+	string stringOutFile = m_strSimuFile + appx + ".out";
+	outFile.open(stringOutFile.data(), ios::app);
+	outFile << "rA\trB\tYR\tDf" << endl;
+	for (auto it_rArB = pFcalA_V->begin(); it_rArB != pFcalA_V->end(); it_rArB++)
+		outFile << (*it_rArB)->m_rA << "\t" << (*it_rArB)->m_rB <<
+		"\t" << (*it_rArB)->m_YrVal << "\t" << (*it_rArB)->m_DfVal << endl;
+	outFile.close();
 }
 
 void ParaEst::DeletepFA_Vec(vector<rArBFAYr*>* pFA_Vec)
@@ -182,7 +182,7 @@ void ParaEst::DeletepFA_Vec(vector<rArBFAYr*>* pFA_Vec)
 	pFA_Vec = NULL;
 }
 
-//¶àÏß³Ì¼ÆËãMCE
+//å¤šçº¿ç¨‹è®¡ç®—MCE
 void ParaEst::OnMultiThreads(ddPair stepSize)
 {
 	SplitInfo splitInfo = SplitRect(rA_Range, rB_Range, GetThreadNumber());
@@ -191,7 +191,7 @@ void ParaEst::OnMultiThreads(ddPair stepSize)
 	ddRange rB_LocalRange;
 	for (int i = 0; i < _ThreadCount; i++)
 		_FcalA_Vec_MC_Vec.push_back(new vector<rArBFAYr*>);
-	//¶àÏß³Ì·Ö¸îÇø¿é
+	//å¤šçº¿ç¨‹åˆ†å‰²åŒºå—
 	int threadPos = 0;
 	for (int y_step = 0; y_step < splitInfo._y_blocks; y_step++)
 		for (int x_step = 0; x_step < splitInfo._x_blocks; x_step++) {
@@ -208,15 +208,15 @@ void ParaEst::OnMultiThreads(ddPair stepSize)
 			_thread_Vec.push_back(pThread);
 			++threadPos;
 		}
-	//µÈ´ı¸÷¸öÏß³Ì½áÊø
+	//ç­‰å¾…å„ä¸ªçº¿ç¨‹ç»“æŸ
 	while (threadcounting < _ThreadCount)
 		::this_thread::sleep_for(chrono::duration<double, std::milli>(1000));
 	threadcounting = 0;
-	//¸÷¸öÏß³ÌÊı¾İ»ã×Ü
+	//å„ä¸ªçº¿ç¨‹æ•°æ®æ±‡æ€»
 	for (auto itor = _FcalA_Vec_MC_Vec.begin(); itor != _FcalA_Vec_MC_Vec.end(); itor++)
 		for (auto itor2 = (*itor)->begin(); itor2 != (*itor)->end(); itor2++)
 			pFcalA_Vec_MC->push_back((*itor2));
-	//ÄÚ´æÊÍ·Å
+	//å†…å­˜é‡Šæ”¾
 	for (auto itor = _thread_Vec.begin(); itor != _thread_Vec.end(); itor++)
 		delete (*itor);
 	for (auto itor = _FcalA_Vec_MC_Vec.begin(); itor != _FcalA_Vec_MC_Vec.end(); itor++)
